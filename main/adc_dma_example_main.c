@@ -13,7 +13,7 @@
 #include "freertos/semphr.h"
 #include "driver/adc.h"
 
-#define TIMES              256
+#define TIMES              1024
 #define GET_UNIT(x)        ((x>>3) & 0x1)
 
 #if CONFIG_IDF_TARGET_ESP32
@@ -80,9 +80,9 @@ static void continuous_adc_init(uint16_t adc1_chan_mask, uint16_t adc2_chan_mask
         adc_pattern[i].unit = unit;
         adc_pattern[i].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
-        ESP_LOGI(TAG, "adc_pattern[%d].atten is :%x", i, adc_pattern[i].atten);
-        ESP_LOGI(TAG, "adc_pattern[%d].channel is :%x", i, adc_pattern[i].channel);
-        ESP_LOGI(TAG, "adc_pattern[%d].unit is :%x", i, adc_pattern[i].unit);
+        //ESP_LOGI(TAG, "adc_pattern[%d].atten is :%x", i, adc_pattern[i].atten);
+        //ESP_LOGI(TAG, "adc_pattern[%d].channel is :%x", i, adc_pattern[i].channel);
+        //ESP_LOGI(TAG, "adc_pattern[%d].unit is :%x", i, adc_pattern[i].unit);
     }
     dig_cfg.adc_pattern = adc_pattern;
     ESP_ERROR_CHECK(adc_digi_controller_configure(&dig_cfg));
@@ -114,12 +114,16 @@ void app_main(void)
     uint8_t result[TIMES] = {0};
     memset(result, 0xcc, TIMES);
 
-    adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_2_5);
-    adc1_config_channel_atten(ADC1_CHANNEL_3,ADC_ATTEN_DB_2_5);
-    adc1_config_channel_atten(ADC1_CHANNEL_6,ADC_ATTEN_DB_2_5);
+    adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_6);
+    adc1_config_channel_atten(ADC1_CHANNEL_3,ADC_ATTEN_DB_6);
+    adc1_config_channel_atten(ADC1_CHANNEL_6,ADC_ATTEN_DB_6);
 
     continuous_adc_init(adc1_chan_mask, adc2_chan_mask, channel, sizeof(channel) / sizeof(adc_channel_t));
     adc_digi_start();
+
+    int64_t start_time = esp_timer_get_time();
+    int block_counter=0;
+    int block_temp=0;
 
     while(1) {
         ret = adc_digi_read_bytes(result, TIMES, &ret_num, ADC_MAX_DELAY);
@@ -140,21 +144,41 @@ void app_main(void)
                  * Solution:
                  * Either decrease the conversion speed, or increase the frequency you call `adc_digi_read_bytes`
                  */
+//            	continue;
             }
 
             ESP_LOGI("TASK:", "ret is %x, ret_num is %d", ret, ret_num);
-            for (int i = 0; i < ret_num; i += ADC_RESULT_BYTE) {
+            for (int i = 0; i < ret_num; i += ADC_RESULT_BYTE)
+            {
                 adc_digi_output_data_t *p = (void*)&result[i];
-                if (check_valid_data(p)) {
+                if (check_valid_data(p))
+                {
             #if EXAMPLE_ADC_USE_OUTPUT_TYPE1
-                    ESP_LOGI(TAG, "Unit: %d, Channel: %d, Value: %d", 1, p->type1.channel, p->type1.data);
+                	if(i<6)
+                		ESP_LOGI(TAG, "Unit: %d, Channel: %d, Value: %d", 1, p->type1.channel, p->type1.data);
             #else
                     ESP_LOGI(TAG, "Unit: %d,_Channel: %d, Value: %x", p->type2.unit + 1, p->type2.channel, p->type2.data);
             #endif
-                } else {
+                }
+                else
+                {
                     ESP_LOGI(TAG, "Invalid data");
                 }
             }
+
+            if((esp_timer_get_time() - start_time)>1000000)
+			{
+            	block_counter=block_temp;
+        		ESP_LOGI(TAG, "Blocks %d",block_counter);
+
+            	start_time = esp_timer_get_time();
+        		block_temp=0;
+			}
+            else
+            {
+            	block_temp+=ret_num;
+            }
+
             //See `note 1`
             vTaskDelay(1);
         } else if (ret == ESP_ERR_TIMEOUT) {
