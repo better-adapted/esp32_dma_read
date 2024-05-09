@@ -65,7 +65,7 @@ static void continuous_adc_init(uint16_t adc1_chan_mask, uint16_t adc2_chan_mask
     adc_digi_configuration_t dig_cfg = {
         .conv_limit_en = ADC_CONV_LIMIT_EN,
         .conv_limit_num = 250,
-        .sample_freq_hz = 20000,
+        .sample_freq_hz = 20480,
         .conv_mode = ADC_CONV_MODE,
         .format = ADC_OUTPUT_TYPE,
     };
@@ -147,25 +147,6 @@ void app_main(void)
 //            	continue;
             }
 
-            ESP_LOGI("TASK:", "ret is %x, ret_num is %d", ret, ret_num);
-            for (int i = 0; i < ret_num; i += ADC_RESULT_BYTE)
-            {
-                adc_digi_output_data_t *p = (void*)&result[i];
-                if (check_valid_data(p))
-                {
-            #if EXAMPLE_ADC_USE_OUTPUT_TYPE1
-                	if(i<6)
-                		ESP_LOGI(TAG, "Unit: %d, Channel: %d, Value: %d", 1, p->type1.channel, p->type1.data);
-            #else
-                    ESP_LOGI(TAG, "Unit: %d,_Channel: %d, Value: %x", p->type2.unit + 1, p->type2.channel, p->type2.data);
-            #endif
-                }
-                else
-                {
-                    ESP_LOGI(TAG, "Invalid data");
-                }
-            }
-
             if((esp_timer_get_time() - start_time)>1000000)
 			{
             	block_counter=block_temp;
@@ -177,6 +158,28 @@ void app_main(void)
             else
             {
             	block_temp+=ret_num;
+            }
+
+            if(block_temp==0)
+            {
+                ESP_LOGI("TASK:", "ret is %x, ret_num is %d", ret, ret_num);
+                for (int i = 0; i < ret_num; i += ADC_RESULT_BYTE)
+                {
+                    adc_digi_output_data_t *p = (void*)&result[i];
+                    if (check_valid_data(p))
+                    {
+                #if EXAMPLE_ADC_USE_OUTPUT_TYPE1
+                    	if(i<12)
+                    		ESP_LOGI(TAG, "Unit: %d, Channel: %d, Value: %d", 1, p->type1.channel, p->type1.data);
+                #else
+                        ESP_LOGI(TAG, "Unit: %d,_Channel: %d, Value: %x", p->type2.unit + 1, p->type2.channel, p->type2.data);
+                #endif
+                    }
+                    else
+                    {
+                        ESP_LOGI(TAG, "Invalid data");
+                    }
+                }
             }
 
             //See `note 1`
