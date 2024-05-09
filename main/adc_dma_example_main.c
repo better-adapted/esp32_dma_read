@@ -13,7 +13,7 @@
 #include "freertos/semphr.h"
 #include "driver/adc.h"
 
-#define TIMES              1024
+#define TIMES              512
 #define GET_UNIT(x)        ((x>>3) & 0x1)
 
 #if CONFIG_IDF_TARGET_ESP32
@@ -75,7 +75,7 @@ static void continuous_adc_init(uint16_t adc1_chan_mask, uint16_t adc2_chan_mask
     for (int i = 0; i < channel_num; i++) {
         uint8_t unit = GET_UNIT(channel[i]);
         uint8_t ch = channel[i] & 0x7;
-        adc_pattern[i].atten = ADC_ATTEN_DB_0;
+        adc_pattern[i].atten = ADC_ATTEN_DB_6;
         adc_pattern[i].channel = ch;
         adc_pattern[i].unit = unit;
         adc_pattern[i].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
@@ -113,10 +113,6 @@ void app_main(void)
     uint32_t ret_num = 0;
     uint8_t result[TIMES] = {0};
     memset(result, 0xcc, TIMES);
-
-    adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_6);
-    adc1_config_channel_atten(ADC1_CHANNEL_3,ADC_ATTEN_DB_6);
-    adc1_config_channel_atten(ADC1_CHANNEL_6,ADC_ATTEN_DB_6);
 
     continuous_adc_init(adc1_chan_mask, adc2_chan_mask, channel, sizeof(channel) / sizeof(adc_channel_t));
     adc_digi_start();
