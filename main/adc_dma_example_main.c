@@ -107,6 +107,61 @@ static bool check_valid_data(const adc_digi_output_data_t *data)
     return true;
 }
 
+typedef struct
+{
+	uint16_t buffer[TIMES/2];
+	uint16_t min;
+	uint16_t max;
+	uint16_t range;
+	uint16_t index;
+}CT_chan_t;
+
+typedef struct
+{
+	CT_chan_t ct_1;
+	CT_chan_t ct_2;
+	CT_chan_t ct_3;
+}CT_results_t;
+
+static CT_results_t CTS_Raw;
+
+void store_ct_raw(CT_chan_t* chan, uint16_t pRaw)
+{
+	if(chan->index>=TIMES/2)
+	{
+		return;
+	}
+
+	if(chan->index==0)
+	{
+		chan->max=0;
+		chan->min=0xFFFF;
+	}
+
+	chan->buffer[chan->index]=pRaw;
+
+	if(chan->min > pRaw)
+	{
+		chan->min = pRaw;
+	}
+
+	if(chan->max < pRaw)
+	{
+		chan->max = pRaw;
+	}
+
+	chan->range = chan->max-chan->min;
+
+	chan->index++;
+}
+
+void results_ct_raw(CT_chan_t* chan,char *id)
+{
+	char msg[200];
+	sprintf(msg,"ID=%s,min=%d,max=%d,range=%d",id,chan->min,chan->max,chan->range);
+	ESP_LOGI(TAG, "%s",msg);
+}
+
 void app_main(void)
 {
     esp_err_t ret;
@@ -158,12 +213,34 @@ void app_main(void)
 
             if(block_temp==0)
             {
-                ESP_LOGI("TASK:", "ret is %x, ret_num is %d", ret, ret_num);
+            	ESP_LOGI("TASK:", "ret is %x, ret_num is %d", ret, ret_num);
+            	{
+            		results_ct_raw(&CTS_Raw.ct_1,"ct_1");
+            		results_ct_raw(&CTS_Raw.ct_2,"ct_2");
+            		results_ct_raw(&CTS_Raw.ct_3,"ct_3");
+
+            		memset(&CTS_Raw,0,sizeof(CTS_Raw));
+            	}
+
                 for (int i = 0; i < ret_num; i += ADC_RESULT_BYTE)
                 {
                     adc_digi_output_data_t *p = (void*)&result[i];
                     if (check_valid_data(p))
                     {
+                    	// store the raw results to the buffer..
+                    	switch(p->type1.channel)
+                    	{
+                    	case 0:
+                    		store_ct_raw(&CTS_Raw.ct_1,p->type1.data);
+                    		break;
+                    	case 3:
+                    		store_ct_raw(&CTS_Raw.ct_2,p->type1.data);
+                    		break;
+                    	case 6:
+                    		store_ct_raw(&CTS_Raw.ct_3,p->type1.data);
+                    		break;
+                    	}
+
                 #if EXAMPLE_ADC_USE_OUTPUT_TYPE1
                     	if(i<12)
                     		ESP_LOGI(TAG, "Unit: %d, Channel: %d, Value: %d", 1, p->type1.channel, p->type1.data);
